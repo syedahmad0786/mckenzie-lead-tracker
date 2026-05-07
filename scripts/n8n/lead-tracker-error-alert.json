@@ -1,0 +1,80 @@
+{
+  "name": "Lead Tracker \u2014 Error Alert \u2192 Slack",
+  "_purpose": "Catches error events from app/n8n. Routes to #errors channel. Severity field controls colour + @mention.",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-tracker-error",
+        "responseMode": "onReceived"
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body || $input.first().json;\nconst sev = (b.severity || 'warn').toLowerCase();\nconst icon = sev === 'critical' ? ':rotating_light:' : sev === 'error' ? ':x:' : ':warning:';\nconst mention = sev === 'critical' ? '<!here> ' : '';\nreturn [{ json: { ...b, sev, icon, mention } }];"
+      },
+      "name": "Format severity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "={{$env.SLACK_ERRORS_CHANNEL}}",
+        "text": "{{$json.mention}}{{$json.icon}} *Lead Tracker \u2014 {{$json.sev}}*\\n*Source:* {{$json.source || 'app'}}\\n*Message:* {{$json.message}}\\n```{{$json.detail || ''}}```"
+      },
+      "name": "Slack: error",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_BOT",
+          "name": "Lead Tracker Bot"
+        }
+      },
+      "position": [
+        680,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Format severity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format severity": {
+      "main": [
+        [
+          {
+            "node": "Slack: error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "tags": [
+    {
+      "name": "lead-tracker"
+    }
+  ]
+}

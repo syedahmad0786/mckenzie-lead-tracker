@@ -1,0 +1,3 @@
+-- DEPRECATED: Phase 1 ships on Airtable only.
+-- The migration lives at ../phase-2-supabase/001_init.sql.
+-- See phase-2-supabase/README.md for triggers to migrate.

@@ -1,0 +1,142 @@
+{
+  "name": "Lead Tracker \u2014 Status Change \u2192 Slack",
+  "_purpose": "Receives status-change events posted by /api/leads/update. Routes to #leads channel for a normal change or to the order-placed celebration workflow when a lead flips to order_placed.",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-tracker-status-change",
+        "responseMode": "onReceived",
+        "responseData": "{\"ok\":true}"
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "value2": "order_placed",
+              "output": 0
+            },
+            {
+              "value2": "lost",
+              "output": 1
+            }
+          ]
+        },
+        "value1": "={{$json.body.newStatus}}"
+      },
+      "name": "Switch on new status",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.N8N_ORDER_PLACED_WEBHOOK}}",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}"
+      },
+      "name": "Forward to Order Placed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "={{$env.SLACK_LEADS_CHANNEL}}",
+        "text": ":x: *Lead marked Lost* \u2014 {{$json.body.contactName || $json.body.email}} ({{$json.body.campaign || 'unknown'}})"
+      },
+      "name": "Slack: lost",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_BOT",
+          "name": "Lead Tracker Bot"
+        }
+      },
+      "position": [
+        700,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "={{$env.SLACK_LEADS_CHANNEL}}",
+        "text": "\u21aa *Status change* \u2014 {{$json.body.contactName || $json.body.email}}: {{$json.body.oldStatus}} \u2192 {{$json.body.newStatus}}"
+      },
+      "name": "Slack: generic",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_BOT",
+          "name": "Lead Tracker Bot"
+        }
+      },
+      "position": [
+        700,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Switch on new status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch on new status": {
+      "main": [
+        [
+          {
+            "node": "Forward to Order Placed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: lost",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: generic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "tags": [
+    {
+      "name": "lead-tracker"
+    }
+  ]
+}

@@ -1,0 +1,192 @@
+{
+  "name": "Lead Tracker \u2014 Typeform Completion \u2192 Airtable + Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-tracker-typeform",
+        "responseMode": "onReceived",
+        "responseData": "{\"ok\":true}"
+      },
+      "name": "Webhook (Typeform)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fr = ($input.first().json.body || $input.first().json).form_response || {};\nconst answers = fr.answers || [];\nconst pick = (hint) => {\n  const a = answers.find(x => (x.field?.ref || '').toLowerCase().includes(hint));\n  return a ? (a.email || a.text || a.phone_number || a.choice?.label) : null;\n};\nconst hidden = fr.hidden || {};\nreturn [{ json: {\n  email:         (pick('email') || '').toLowerCase(),\n  contactName:   pick('name'),\n  company:       pick('company'),\n  phone:         pick('phone'),\n  campaignId:    hidden.campaign_id || null,\n  campaignName:  hidden.campaign_name || null,\n  responseId:    fr.token || null,\n  dateIntroduced: new Date().toISOString().slice(0,10),\n  status: 'not_yet_closed'\n}}];"
+      },
+      "name": "Extract Typeform fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.email}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Has email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "base": {
+          "__rl": true,
+          "value": "={{$env.AIRTABLE_BASE_ID}}",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Lead Tracker \u2014 Leads",
+          "mode": "name"
+        },
+        "matchingColumns": [
+          "Email"
+        ],
+        "fields": {
+          "Email": "={{$json.email}}",
+          "Contact Name": "={{$json.contactName}}",
+          "Company": "={{$json.company}}",
+          "Phone": "={{$json.phone}}",
+          "Campaign": "={{$json.campaignName}}",
+          "Instantly Campaign ID": "={{$json.campaignId}}",
+          "Typeform Response ID": "={{$json.responseId}}",
+          "Date Introduced": "={{$json.dateIntroduced}}",
+          "Status": "={{$json.status}}"
+        }
+      },
+      "name": "Upsert Lead (Airtable)",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "AIRTABLE_PAT",
+          "name": "Lead Tracker PAT"
+        }
+      },
+      "position": [
+        900,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "={{$env.SLACK_LEADS_CHANNEL}}",
+        "text": "\u2705 *Typeform completed* \u2014 {{$json.contactName || $json.email}} from *{{$json.campaignName || 'unknown campaign'}}* is officially handed off to McKenzie.",
+        "otherOptions": {
+          "link_names": true
+        }
+      },
+      "name": "Notify Slack #leads",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_BOT",
+          "name": "Lead Tracker Bot"
+        }
+      },
+      "position": [
+        1120,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "={{$env.SLACK_ERRORS_CHANNEL}}",
+        "text": "\u26a0\ufe0f Typeform completion received with no email. Payload: ```{{JSON.stringify($json)}}```"
+      },
+      "name": "Alert: missing email",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_BOT",
+          "name": "Lead Tracker Bot"
+        }
+      },
+      "position": [
+        900,
+        380
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (Typeform)": {
+      "main": [
+        [
+          {
+            "node": "Extract Typeform fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Typeform fields": {
+      "main": [
+        [
+          {
+            "node": "Has email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has email?": {
+      "main": [
+        [
+          {
+            "node": "Upsert Lead (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert: missing email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Lead (Airtable)": {
+      "main": [
+        [
+          {
+            "node": "Notify Slack #leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "tags": [
+    {
+      "name": "lead-tracker"
+    }
+  ]
+}

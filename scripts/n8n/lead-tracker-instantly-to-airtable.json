@@ -1,0 +1,138 @@
+{
+  "name": "Lead Tracker \u2014 Instantly Positive Reply \u2192 Airtable + Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-tracker-instantly",
+        "responseMode": "onReceived",
+        "responseData": "{\"ok\":true}",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "name": "Webhook (Instantly)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body || $input.first().json;\nreturn [{ json: {\n  email:        (b.lead_email || b.email || '').toLowerCase(),\n  contactName:  [b.first_name, b.last_name].filter(Boolean).join(' ') || null,\n  company:      b.company_name || null,\n  campaignId:   b.campaign_id || null,\n  campaignName: b.campaign_name || null,\n  dateIntroduced: new Date().toISOString().slice(0,10),\n  status:       'not_yet_closed',\n  raw: b\n}}];"
+      },
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "base": {
+          "__rl": true,
+          "value": "={{$env.AIRTABLE_BASE_ID}}",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Lead Tracker \u2014 Leads",
+          "mode": "name"
+        },
+        "matchingColumns": [
+          "Email"
+        ],
+        "fields": {
+          "Email": "={{$json.email}}",
+          "Contact Name": "={{$json.contactName}}",
+          "Company": "={{$json.company}}",
+          "Campaign": "={{$json.campaignName}}",
+          "Instantly Campaign ID": "={{$json.campaignId}}",
+          "Date Introduced": "={{$json.dateIntroduced}}",
+          "Status": "={{$json.status}}"
+        }
+      },
+      "name": "Upsert Lead (Airtable)",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "AIRTABLE_PAT",
+          "name": "Lead Tracker PAT"
+        }
+      },
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "={{$env.SLACK_LEADS_CHANNEL}}",
+        "text": "\ud83c\udfaf *New positive reply* \u2014 {{$json.contactName || $json.email}} from *{{$json.campaignName || 'unknown campaign'}}*. Lead is now on the McKenzie tracker.",
+        "otherOptions": {
+          "link_names": true,
+          "unfurl_links": false
+        }
+      },
+      "name": "Notify Slack #leads",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_BOT",
+          "name": "Lead Tracker Bot"
+        }
+      },
+      "position": [
+        900,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (Instantly)": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Upsert Lead (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Lead (Airtable)": {
+      "main": [
+        [
+          {
+            "node": "Notify Slack #leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "tags": [
+    {
+      "name": "lead-tracker"
+    }
+  ]
+}

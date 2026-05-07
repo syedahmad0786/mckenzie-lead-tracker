@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { font-family: Inter, system-ui, -apple-system, sans-serif; }
+  body { @apply bg-canvas text-ink; }
+}
+
+@layer components {
+  .card     { @apply bg-canvas-card border border-canvas-border rounded-md; }
+  .btn      { @apply inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors; }
+  .btn-pri  { @apply btn bg-brand text-white hover:bg-brand-600; }
+  .btn-ghost{ @apply btn text-ink-subtle hover:bg-canvas-border/40; }
+  .pill     { @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium; }
+  .chip     { @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border; }
+}

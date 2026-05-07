@@ -1,0 +1,122 @@
+{
+  "name": "Lead Tracker \u2014 Daily Digest \u2192 Slack",
+  "_purpose": "Daily 9am ET. Pulls yesterday's lead activity from Airtable + computes today's totals. Posts a one-line stat block + a roll-up of new handoffs and orders to #leads.",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-tracker-daily-digest",
+        "responseMode": "onReceived"
+      },
+      "name": "Webhook (or cron)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "={{$env.AIRTABLE_BASE_ID}}",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Lead Tracker \u2014 Leads",
+          "mode": "name"
+        },
+        "options": {
+          "pageSize": 100
+        }
+      },
+      "name": "Fetch all leads",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "AIRTABLE_PAT",
+          "name": "Lead Tracker PAT"
+        }
+      },
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date(); today.setHours(0,0,0,0);\nconst yesterday = new Date(today.getTime() - 24*60*60*1000);\nconst yISO = yesterday.toISOString().slice(0,10);\nconst tISO = today.toISOString().slice(0,10);\nconst rows = $input.all().map(i => i.json.fields);\nconst yesterdayHandoffs = rows.filter(r => r['Date Introduced'] === yISO);\nconst yesterdayOrders   = rows.filter(r => r.Status === 'order_placed' && r['Date First Order'] === yISO);\nconst totals = rows.reduce((acc, r) => {\n  acc.total += 1;\n  if (r.Status === 'order_placed') {\n    acc.placed += 1;\n    acc.revenue += Number(r['First Order Amount'] || 0);\n  }\n  return acc;\n}, { total: 0, placed: 0, revenue: 0 });\nconst usd = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);\nreturn [{ json: {\n  yesterday: yISO,\n  newHandoffs: yesterdayHandoffs.length,\n  newOrders:   yesterdayOrders.length,\n  newRevenue:  yesterdayOrders.reduce((s, r) => s + Number(r['First Order Amount'] || 0), 0),\n  totalLeads:    totals.total,\n  totalOrders:   totals.placed,\n  totalRevenue:  totals.revenue,\n  totalRevenueFmt: usd(totals.revenue)\n}}];"
+      },
+      "name": "Compute digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "={{$env.SLACK_LEADS_CHANNEL}}",
+        "text": "\ud83d\udcca *McKenzie daily digest \u2014 {{$json.yesterday}}*\\n\u2022 New handoffs: *{{$json.newHandoffs}}*\\n\u2022 New orders: *{{$json.newOrders}}*\\n\u2022 Yesterday revenue: *${{$json.newRevenue}}*\\n\\n_All-time:_ {{$json.totalLeads}} leads \u00b7 {{$json.totalOrders}} orders \u00b7 {{$json.totalRevenueFmt}} revenue"
+      },
+      "name": "Slack: digest",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_BOT",
+          "name": "Lead Tracker Bot"
+        }
+      },
+      "position": [
+        900,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (or cron)": {
+      "main": [
+        [
+          {
+            "node": "Fetch all leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch all leads": {
+      "main": [
+        [
+          {
+            "node": "Compute digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute digest": {
+      "main": [
+        [
+          {
+            "node": "Slack: digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "tags": [
+    {
+      "name": "lead-tracker"
+    }
+  ]
+}

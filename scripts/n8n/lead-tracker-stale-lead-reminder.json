@@ -1,0 +1,165 @@
+{
+  "name": "Lead Tracker \u2014 Stale Lead Reminder (cron)",
+  "_purpose": "Daily at 9am ET. Pulls every lead with status=not_yet_closed and Date Introduced > 30 days ago. Posts a roll-up to #leads so the team can decide whether to nudge McKenzie or mark them lost.",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24,
+              "triggerAtHour": 14
+            }
+          ]
+        }
+      },
+      "name": "Daily 9am ET",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "={{$env.AIRTABLE_BASE_ID}}",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Lead Tracker \u2014 Leads",
+          "mode": "name"
+        },
+        "options": {
+          "filterByFormula": "AND({Status} = 'not_yet_closed', IS_BEFORE({Date Introduced}, DATEADD(TODAY(), -30, 'days')))",
+          "sort": [
+            {
+              "field": "Date Introduced",
+              "direction": "asc"
+            }
+          ],
+          "pageSize": 100
+        }
+      },
+      "name": "Fetch stale leads",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "AIRTABLE_PAT",
+          "name": "Lead Tracker PAT"
+        }
+      },
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nif (!items.length) return [{ json: { skip: true } }];\nconst rows = items.map(i => i.json.fields).slice(0, 25);\nconst lines = rows.map(r => `\u2022 ${r['Contact Name'] || r.Email} (${r.Campaign || '\u2014'}) \u2014 introduced ${r['Date Introduced']}`).join('\\n');\nconst tail = items.length > 25 ? `\\n\u2026and ${items.length - 25} more` : '';\nreturn [{ json: { count: items.length, body: lines + tail, skip: false } }];"
+      },
+      "name": "Format roll-up",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.skip}}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "name": "Anything stale?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "={{$env.SLACK_LEADS_CHANNEL}}",
+        "text": "\u23f3 *{{$json.count}} stale leads* (>30 days, not_yet_closed). Worth a nudge or a Lost?\\n\\n{{$json.body}}"
+      },
+      "name": "Slack: stale roll-up",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_BOT",
+          "name": "Lead Tracker Bot"
+        }
+      },
+      "position": [
+        1120,
+        220
+      ]
+    }
+  ],
+  "connections": {
+    "Daily 9am ET": {
+      "main": [
+        [
+          {
+            "node": "Fetch stale leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch stale leads": {
+      "main": [
+        [
+          {
+            "node": "Format roll-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format roll-up": {
+      "main": [
+        [
+          {
+            "node": "Anything stale?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anything stale?": {
+      "main": [
+        [
+          {
+            "node": "Slack: stale roll-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "tags": [
+    {
+      "name": "lead-tracker"
+    }
+  ]
+}

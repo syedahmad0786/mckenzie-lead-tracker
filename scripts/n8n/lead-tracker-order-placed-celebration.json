@@ -1,0 +1,105 @@
+{
+  "name": "Lead Tracker \u2014 Order Placed Celebration \u2192 Slack",
+  "_purpose": "Triggered by status-change router. Posts a celebratory message in #leads with the order amount, plus an internal-only message to the agency channel that includes the projected payout (15% of first order \u2014 hidden from McKenzie's view).",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-tracker-order-placed",
+        "responseMode": "onReceived",
+        "responseData": "{\"ok\":true}"
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body || $input.first().json;\nconst amount = Number(b.firstOrderAmount || 0);\nconst payout = Math.round(amount * 0.15 * 100) / 100;\nconst usd = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);\nreturn [{ json: { ...b, amountFormatted: usd(amount), payoutFormatted: usd(payout) } }];"
+      },
+      "name": "Compute payout",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "={{$env.SLACK_LEADS_CHANNEL}}",
+        "text": "\ud83c\udf89 *Order placed!* {{$json.contactName || $json.email}} from *{{$json.campaign}}* \u2014 {{$json.amountFormatted}}. Nice work team."
+      },
+      "name": "Slack: shared celebration",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_BOT",
+          "name": "Lead Tracker Bot"
+        }
+      },
+      "position": [
+        700,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "={{$env.SLACK_AGENCY_PRIVATE_CHANNEL}}",
+        "text": "\ud83d\udcb0 *Payout owed (internal)* \u2014 {{$json.contactName || $json.email}} ({{$json.campaign}}): order {{$json.amountFormatted}}, projected payout *{{$json.payoutFormatted}}* @ 15%. Payout column still hidden in the McKenzie view per Ryan."
+      },
+      "name": "Slack: agency-only payout",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "credentials": {
+        "slackApi": {
+          "id": "SLACK_BOT",
+          "name": "Lead Tracker Bot"
+        }
+      },
+      "position": [
+        700,
+        380
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Compute payout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute payout": {
+      "main": [
+        [
+          {
+            "node": "Slack: shared celebration",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack: agency-only payout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "tags": [
+    {
+      "name": "lead-tracker"
+    }
+  ]
+}

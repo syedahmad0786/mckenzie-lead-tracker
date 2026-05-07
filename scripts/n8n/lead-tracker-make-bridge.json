@@ -1,0 +1,103 @@
+{
+  "name": "Lead Tracker \u2014 Make.com Bridge \u2192 Airtable",
+  "_purpose": "Catches the output of Lujan + Saad's existing Make.com scenarios (Construction 4851014, Tourist 4552621, plus the three launching this weekend: Acquisitions Relaunch, Acquisitions Prequalified, Banks & Credit Unions). Add an HTTP module at the END of each Make scenario that POSTs the lead JSON to this webhook. That way each scenario keeps its own copy of the prospect-summary-email-to-Chris flow, and this workflow handles the dashboard-side write so we don't have to edit each scenario individually.",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-tracker-make-bridge",
+        "responseMode": "onReceived",
+        "responseData": "{\"ok\":true}"
+      },
+      "name": "Webhook (Make.com)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Make sends whatever shape the scenario was wired to send.\n// Normalize to our canonical lead schema. Add new keys here as new\n// Make scenarios come online so we never have to touch them again.\nconst b = $input.first().json.body || $input.first().json;\nreturn [{ json: {\n  email:         (b.email || b.lead_email || b.Email || '').toLowerCase(),\n  contactName:   b.full_name || b.name || [b.first_name, b.last_name].filter(Boolean).join(' ') || null,\n  company:       b.company || b.company_name || null,\n  phone:         b.phone || b.phone_number || null,\n  campaignName:  b.campaign_name || b.campaign || null,\n  campaignId:    b.campaign_id || null,\n  source:        b.source || b.scenario_id || 'make',\n  scenarioId:    b.scenario_id || null,\n  dateIntroduced: b.date_introduced || new Date().toISOString().slice(0,10),\n  status:        'not_yet_closed'\n}}];"
+      },
+      "name": "Normalize Make payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "base": {
+          "__rl": true,
+          "value": "={{$env.AIRTABLE_BASE_ID}}",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Lead Tracker \u2014 Leads",
+          "mode": "name"
+        },
+        "matchingColumns": [
+          "Email"
+        ],
+        "fields": {
+          "Email": "={{$json.email}}",
+          "Contact Name": "={{$json.contactName}}",
+          "Company": "={{$json.company}}",
+          "Phone": "={{$json.phone}}",
+          "Campaign": "={{$json.campaignName}}",
+          "Instantly Campaign ID": "={{$json.campaignId}}",
+          "Date Introduced": "={{$json.dateIntroduced}}",
+          "Status": "={{$json.status}}"
+        }
+      },
+      "name": "Upsert Lead (Airtable)",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "AIRTABLE_PAT",
+          "name": "Lead Tracker PAT"
+        }
+      },
+      "position": [
+        680,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (Make.com)": {
+      "main": [
+        [
+          {
+            "node": "Normalize Make payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Make payload": {
+      "main": [
+        [
+          {
+            "node": "Upsert Lead (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "tags": [
+    {
+      "name": "lead-tracker"
+    }
+  ]
+}

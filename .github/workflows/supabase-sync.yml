@@ -1,0 +1,23 @@
+name: Daily Digest Trigger
+
+# Phase 1: Supabase sync deferred. This workflow now triggers the n8n
+# daily-digest scenario instead of resyncing the (no longer existent) Supabase mirror.
+# When Phase 2 lands, restore the original supabase-sync.yml from git history.
+
+on:
+  schedule:
+    - cron: "0 14 * * *"   # 9am ET / 8am CT every day
+  workflow_dispatch:
+
+jobs:
+  trigger-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit n8n daily-digest webhook
+        env:
+          N8N_DAILY_DIGEST_WEBHOOK: ${{ secrets.N8N_DAILY_DIGEST_WEBHOOK }}
+          N8N_TRIGGER_SECRET:        ${{ secrets.N8N_TRIGGER_SECRET }}
+        run: |
+          curl -fsS -X POST \
+            -H "x-trigger-secret: $N8N_TRIGGER_SECRET" \
+            "$N8N_DAILY_DIGEST_WEBHOOK"
