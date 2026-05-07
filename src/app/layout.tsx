@@ -2,14 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "McKenzie Lead Tracker",
-  description: "Shared lead handoff and order tracking dashboard",
+  title: "Lead Tracker — McKenzie SewOn × Modern Amenities",
+  description: "Shared lead tracking dashboard",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body className="bg-canvas text-ink antialiased">{children}</body>
-    </html>
-  );
+  return <html lang="en"><body>{children}</body></html>;
 }
