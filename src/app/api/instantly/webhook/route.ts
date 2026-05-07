@@ -27,12 +27,12 @@ export async function POST(req: NextRequest) {
 
   await upsertLeadByEmail(email, {
     Email: email,
-    "Contact Name": body.first_name && body.last_name ? `${body.first_name} ${body.last_name}` : (body.first_name || null),
-    Company: body.company_name ?? null,
+    "Contact Name": body.first_name && body.last_name ? `${body.first_name} ${body.last_name}` : (body.first_name || undefined),
+    Company: body.company_name ?? undefined,
     "Date Introduced": new Date().toISOString().slice(0, 10),
     Status: "not_yet_closed",
-    "Instantly Campaign ID": body.campaign_id ?? null,
-    Campaign: body.campaign_name ?? null,
+    "Instantly Campaign ID": body.campaign_id ?? undefined,
+    Campaign: body.campaign_name ?? undefined,
   });
 
   return NextResponse.json({ success: true });

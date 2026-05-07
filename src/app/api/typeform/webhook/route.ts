@@ -32,14 +32,14 @@ export async function POST(req: NextRequest) {
 
   const fields = {
     Email: email,
-    "Contact Name": pickField(answers, "name") ?? null,
-    Company: pickField(answers, "company") ?? null,
-    Phone: pickField(answers, "phone") ?? null,
+    "Contact Name": pickField(answers, "name") ?? undefined,
+    Company: pickField(answers, "company") ?? undefined,
+    Phone: pickField(answers, "phone") ?? undefined,
     "Date Introduced": new Date().toISOString().slice(0, 10),
     Status: "not_yet_closed" as const,
-    "Typeform Response ID": payload.form_response?.token ?? null,
-    "Instantly Campaign ID": pickHidden(payload, "campaign_id") ?? null,
-    Campaign: pickHidden(payload, "campaign_name") ?? null,
+    "Typeform Response ID": payload.form_response?.token ?? undefined,
+    "Instantly Campaign ID": pickHidden(payload, "campaign_id") ?? undefined,
+    Campaign: pickHidden(payload, "campaign_name") ?? undefined,
   };
 
   await upsertLeadByEmail(email, fields);
@@ -71,11 +71,11 @@ interface TypeformPayload {
   };
 }
 
-function pickField(answers: TypeformAnswer[], hint: string): string | null {
+function pickField(answers: TypeformAnswer[], hint: string): string | undefined {
   const a = answers.find((x) => (x.field?.ref ?? "").toLowerCase().includes(hint));
-  if (!a) return null;
-  return a.email ?? a.text ?? a.phone_number ?? a.choice?.label ?? null;
+  if (!a) return undefined;
+  return a.email ?? a.text ?? a.phone_number ?? a.choice?.label ?? undefined;
 }
-function pickHidden(p: TypeformPayload, key: string): string | null {
-  return p.form_response?.hidden?.[key] ?? null;
+function pickHidden(p: TypeformPayload, key: string): string | undefined {
+  return p.form_response?.hidden?.[key] ?? undefined;
 }

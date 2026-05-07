@@ -138,7 +138,8 @@ export async function appendAuditEntries(entries: AirtableAuditRecord["fields"][
   // Airtable batch creates max 10 at a time
   for (let i = 0; i < entries.length; i += 10) {
     const chunk = entries.slice(i, i + 10).map((fields) => ({ fields }));
-    await base()(TABLES.AuditLog).create(chunk);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await base()(TABLES.AuditLog).create(chunk as any);
   }
 }
 
