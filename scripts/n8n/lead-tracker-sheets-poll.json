@@ -1,0 +1,473 @@
+{
+    "updatedAt": "2026-05-07T20:51:46.020Z",
+    "createdAt": "2026-05-07T20:51:46.020Z",
+    "id": "btu9k9VcvlP370sC",
+    "name": "Lead Tracker \u2014 Sheets Poll \u2192 Airtable (every 5 min)",
+    "description": null,
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "minutes",
+                            "minutesInterval": 5
+                        }
+                    ]
+                }
+            },
+            "name": "Every 5 min",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ],
+            "id": "a05fbcfb-535d-4958-b746-87cf1479ab0c"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "https://docs.google.com/spreadsheets/d/1VV44N1sURf5RJEZGo49l-VEtGBDi8LlNQWli65GlItU/gviz/tq?tqx=out:csv&headers=1",
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "text"
+                        }
+                    }
+                }
+            },
+            "name": "Fetch sheet CSV",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4,
+            "position": [
+                460,
+                300
+            ],
+            "id": "30ec87f5-20fd-4141-94e2-f0fd60656200"
+        },
+        {
+            "parameters": {
+                "jsCode": "const txt = $input.first().json.data || $input.first().json.body || '';\nconst lines = txt.split(/\\r?\\n/).filter(l => l.length);\nif (!lines.length) return [];\n// quick CSV parser \u2014 sheets gviz quotes everything, so simple split on \"\"\nconst parse = (l) => {\n  const out = []; let cur = ''; let inQ = false;\n  for (let i = 0; i < l.length; i++) {\n    const c = l[i];\n    if (c === '\"') { if (inQ && l[i+1] === '\"') { cur += '\"'; i++; } else inQ = !inQ; }\n    else if (c === ',' && !inQ) { out.push(cur); cur = ''; }\n    else cur += c;\n  }\n  out.push(cur); return out;\n};\nconst headers = parse(lines[0]);\nconst seen = new Set();\nconst items = [];\nfor (let i = 1; i < lines.length; i++) {\n  const cols = parse(lines[i]);\n  const row = Object.fromEntries(headers.map((h, j) => [h, (cols[j] || '').trim()]));\n  const email = (row.Email || '').toLowerCase();\n  if (!email || seen.has(email)) continue;\n  seen.add(email);\n  const name = [row['First Name'], row['Last Name']].filter(Boolean).join(' ') || null;\n  const date = (row['Form Sent At'] || '').slice(0, 10) || null;\n  items.push({ json: {\n    Email: email,\n    'Contact Name': name,\n    Company: row.Company || null,\n    Campaign: 'Construction',\n    'Date Introduced': date,\n    Status: 'not_yet_closed',\n    Notes: `Auto-imported from Sheets. Form Submitted: ${row['Form Submitted'] || 'No'}.`\n  }});\n}\nreturn items;"
+            },
+            "name": "Parse CSV \u2192 leads",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                680,
+                300
+            ],
+            "id": "04ef546c-ccca-4dd1-b30d-1eb0a4fd47a2"
+        },
+        {
+            "parameters": {
+                "operation": "upsert",
+                "base": {
+                    "__rl": true,
+                    "value": "appcAs8YL3V7BcerG",
+                    "mode": "id"
+                },
+                "table": {
+                    "__rl": true,
+                    "value": "Lead Tracker \u2014 Leads",
+                    "mode": "name"
+                },
+                "columnsToMatchOn": [
+                    "Email"
+                ],
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "Email": "={{$json.Email}}",
+                        "Contact Name": "={{$json['Contact Name']}}",
+                        "Company": "={{$json.Company}}",
+                        "Campaign": "={{$json.Campaign}}",
+                        "Date Introduced": "={{$json['Date Introduced']}}",
+                        "Status": "={{$json.Status}}",
+                        "Notes": "={{$json.Notes}}"
+                    },
+                    "matchingColumns": [
+                        "Email"
+                    ],
+                    "schema": [
+                        {
+                            "id": "Email",
+                            "displayName": "Email",
+                            "required": false,
+                            "defaultMatch": true,
+                            "canBeUsedToMatch": true,
+                            "display": true,
+                            "type": "string"
+                        },
+                        {
+                            "id": "Contact Name",
+                            "displayName": "Contact Name",
+                            "required": false,
+                            "defaultMatch": false,
+                            "canBeUsedToMatch": true,
+                            "display": true,
+                            "type": "string"
+                        },
+                        {
+                            "id": "Company",
+                            "displayName": "Company",
+                            "required": false,
+                            "defaultMatch": false,
+                            "canBeUsedToMatch": true,
+                            "display": true,
+                            "type": "string"
+                        },
+                        {
+                            "id": "Campaign",
+                            "displayName": "Campaign",
+                            "required": false,
+                            "defaultMatch": false,
+                            "canBeUsedToMatch": true,
+                            "display": true,
+                            "type": "string"
+                        },
+                        {
+                            "id": "Date Introduced",
+                            "displayName": "Date Introduced",
+                            "required": false,
+                            "defaultMatch": false,
+                            "canBeUsedToMatch": true,
+                            "display": true,
+                            "type": "string"
+                        },
+                        {
+                            "id": "Status",
+                            "displayName": "Status",
+                            "required": false,
+                            "defaultMatch": false,
+                            "canBeUsedToMatch": true,
+                            "display": true,
+                            "type": "string"
+                        },
+                        {
+                            "id": "Notes",
+                            "displayName": "Notes",
+                            "required": false,
+                            "defaultMatch": false,
+                            "canBeUsedToMatch": true,
+                            "display": true,
+                            "type": "string"
+                        }
+                    ],
+                    "attemptToConvertTypes": false,
+                    "convertFieldsToString": false
+                }
+            },
+            "name": "Upsert to Airtable",
+            "type": "n8n-nodes-base.airtable",
+            "typeVersion": 2,
+            "credentials": {
+                "airtableTokenApi": {
+                    "id": "42AYmvdE03AzCUdm",
+                    "name": "Lead Tracker PAT"
+                }
+            },
+            "position": [
+                900,
+                300
+            ],
+            "id": "1e587aff-2005-4a61-9283-b5e800949a16"
+        }
+    ],
+    "connections": {
+        "Every 5 min": {
+            "main": [
+                [
+                    {
+                        "node": "Fetch sheet CSV",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fetch sheet CSV": {
+            "main": [
+                [
+                    {
+                        "node": "Parse CSV \u2192 leads",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse CSV \u2192 leads": {
+            "main": [
+                [
+                    {
+                        "node": "Upsert to Airtable",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": {
+        "node:Every 5 min": {
+            "recurrenceRules": []
+        }
+    },
+    "meta": null,
+    "pinData": null,
+    "versionId": "abbe59e3-6b5c-4229-909d-1253ca14f47b",
+    "activeVersionId": "abbe59e3-6b5c-4229-909d-1253ca14f47b",
+    "versionCounter": 4,
+    "triggerCount": 1,
+    "shared": [
+        {
+            "updatedAt": "2026-05-07T20:51:46.026Z",
+            "createdAt": "2026-05-07T20:51:46.026Z",
+            "role": "workflow:owner",
+            "workflowId": "btu9k9VcvlP370sC",
+            "projectId": "WHikqY6O9I1sPtUN",
+            "project": {
+                "updatedAt": "2025-12-09T20:15:45.964Z",
+                "createdAt": "2025-12-09T19:57:58.234Z",
+                "id": "WHikqY6O9I1sPtUN",
+                "name": "Adam Wolfe <adam@modern-amenities.com>",
+                "type": "personal",
+                "icon": null,
+                "description": null,
+                "creatorId": "24967583-4335-4bb3-91bf-613a13f796eb"
+            }
+        }
+    ],
+    "tags": [],
+    "activeVersion": {
+        "updatedAt": "2026-05-07T20:51:46.029Z",
+        "createdAt": "2026-05-07T20:51:46.029Z",
+        "versionId": "abbe59e3-6b5c-4229-909d-1253ca14f47b",
+        "workflowId": "btu9k9VcvlP370sC",
+        "nodes": [
+            {
+                "parameters": {
+                    "rule": {
+                        "interval": [
+                            {
+                                "field": "minutes",
+                                "minutesInterval": 5
+                            }
+                        ]
+                    }
+                },
+                "name": "Every 5 min",
+                "type": "n8n-nodes-base.scheduleTrigger",
+                "typeVersion": 1,
+                "position": [
+                    240,
+                    300
+                ],
+                "id": "a05fbcfb-535d-4958-b746-87cf1479ab0c"
+            },
+            {
+                "parameters": {
+                    "method": "GET",
+                    "url": "https://docs.google.com/spreadsheets/d/1VV44N1sURf5RJEZGo49l-VEtGBDi8LlNQWli65GlItU/gviz/tq?tqx=out:csv&headers=1",
+                    "options": {
+                        "response": {
+                            "response": {
+                                "responseFormat": "text"
+                            }
+                        }
+                    }
+                },
+                "name": "Fetch sheet CSV",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4,
+                "position": [
+                    460,
+                    300
+                ],
+                "id": "30ec87f5-20fd-4141-94e2-f0fd60656200"
+            },
+            {
+                "parameters": {
+                    "jsCode": "const txt = $input.first().json.data || $input.first().json.body || '';\nconst lines = txt.split(/\\r?\\n/).filter(l => l.length);\nif (!lines.length) return [];\n// quick CSV parser \u2014 sheets gviz quotes everything, so simple split on \"\"\nconst parse = (l) => {\n  const out = []; let cur = ''; let inQ = false;\n  for (let i = 0; i < l.length; i++) {\n    const c = l[i];\n    if (c === '\"') { if (inQ && l[i+1] === '\"') { cur += '\"'; i++; } else inQ = !inQ; }\n    else if (c === ',' && !inQ) { out.push(cur); cur = ''; }\n    else cur += c;\n  }\n  out.push(cur); return out;\n};\nconst headers = parse(lines[0]);\nconst seen = new Set();\nconst items = [];\nfor (let i = 1; i < lines.length; i++) {\n  const cols = parse(lines[i]);\n  const row = Object.fromEntries(headers.map((h, j) => [h, (cols[j] || '').trim()]));\n  const email = (row.Email || '').toLowerCase();\n  if (!email || seen.has(email)) continue;\n  seen.add(email);\n  const name = [row['First Name'], row['Last Name']].filter(Boolean).join(' ') || null;\n  const date = (row['Form Sent At'] || '').slice(0, 10) || null;\n  items.push({ json: {\n    Email: email,\n    'Contact Name': name,\n    Company: row.Company || null,\n    Campaign: 'Construction',\n    'Date Introduced': date,\n    Status: 'not_yet_closed',\n    Notes: `Auto-imported from Sheets. Form Submitted: ${row['Form Submitted'] || 'No'}.`\n  }});\n}\nreturn items;"
+                },
+                "name": "Parse CSV \u2192 leads",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [
+                    680,
+                    300
+                ],
+                "id": "04ef546c-ccca-4dd1-b30d-1eb0a4fd47a2"
+            },
+            {
+                "parameters": {
+                    "operation": "upsert",
+                    "base": {
+                        "__rl": true,
+                        "value": "appcAs8YL3V7BcerG",
+                        "mode": "id"
+                    },
+                    "table": {
+                        "__rl": true,
+                        "value": "Lead Tracker \u2014 Leads",
+                        "mode": "name"
+                    },
+                    "columnsToMatchOn": [
+                        "Email"
+                    ],
+                    "columns": {
+                        "mappingMode": "defineBelow",
+                        "value": {
+                            "Email": "={{$json.Email}}",
+                            "Contact Name": "={{$json['Contact Name']}}",
+                            "Company": "={{$json.Company}}",
+                            "Campaign": "={{$json.Campaign}}",
+                            "Date Introduced": "={{$json['Date Introduced']}}",
+                            "Status": "={{$json.Status}}",
+                            "Notes": "={{$json.Notes}}"
+                        },
+                        "matchingColumns": [
+                            "Email"
+                        ],
+                        "schema": [
+                            {
+                                "id": "Email",
+                                "displayName": "Email",
+                                "required": false,
+                                "defaultMatch": true,
+                                "canBeUsedToMatch": true,
+                                "display": true,
+                                "type": "string"
+                            },
+                            {
+                                "id": "Contact Name",
+                                "displayName": "Contact Name",
+                                "required": false,
+                                "defaultMatch": false,
+                                "canBeUsedToMatch": true,
+                                "display": true,
+                                "type": "string"
+                            },
+                            {
+                                "id": "Company",
+                                "displayName": "Company",
+                                "required": false,
+                                "defaultMatch": false,
+                                "canBeUsedToMatch": true,
+                                "display": true,
+                                "type": "string"
+                            },
+                            {
+                                "id": "Campaign",
+                                "displayName": "Campaign",
+                                "required": false,
+                                "defaultMatch": false,
+                                "canBeUsedToMatch": true,
+                                "display": true,
+                                "type": "string"
+                            },
+                            {
+                                "id": "Date Introduced",
+                                "displayName": "Date Introduced",
+                                "required": false,
+                                "defaultMatch": false,
+                                "canBeUsedToMatch": true,
+                                "display": true,
+                                "type": "string"
+                            },
+                            {
+                                "id": "Status",
+                                "displayName": "Status",
+                                "required": false,
+                                "defaultMatch": false,
+                                "canBeUsedToMatch": true,
+                                "display": true,
+                                "type": "string"
+                            },
+                            {
+                                "id": "Notes",
+                                "displayName": "Notes",
+                                "required": false,
+                                "defaultMatch": false,
+                                "canBeUsedToMatch": true,
+                                "display": true,
+                                "type": "string"
+                            }
+                        ],
+                        "attemptToConvertTypes": false,
+                        "convertFieldsToString": false
+                    }
+                },
+                "name": "Upsert to Airtable",
+                "type": "n8n-nodes-base.airtable",
+                "typeVersion": 2,
+                "credentials": {
+                    "airtableTokenApi": {
+                        "id": "42AYmvdE03AzCUdm",
+                        "name": "Lead Tracker PAT"
+                    }
+                },
+                "position": [
+                    900,
+                    300
+                ],
+                "id": "1e587aff-2005-4a61-9283-b5e800949a16"
+            }
+        ],
+        "connections": {
+            "Every 5 min": {
+                "main": [
+                    [
+                        {
+                            "node": "Fetch sheet CSV",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Fetch sheet CSV": {
+                "main": [
+                    [
+                        {
+                            "node": "Parse CSV \u2192 leads",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Parse CSV \u2192 leads": {
+                "main": [
+                    [
+                        {
+                            "node": "Upsert to Airtable",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            }
+        },
+        "authors": "Adam Wolfe",
+        "name": null,
+        "description": null,
+        "autosaved": false,
+        "workflowPublishHistory": [
+            {
+                "createdAt": "2026-05-07T20:51:47.107Z",
+                "id": 939,
+                "workflowId": "btu9k9VcvlP370sC",
+                "versionId": "abbe59e3-6b5c-4229-909d-1253ca14f47b",
+                "event": "activated",
+                "userId": "24967583-4335-4bb3-91bf-613a13f796eb"
+            }
+        ]
+    }
+}
