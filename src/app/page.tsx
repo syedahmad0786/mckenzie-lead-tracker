@@ -59,7 +59,10 @@ interface ApiResponse {
   totalLeads: number;
   leads: ApiLead[];
   kpis: { leadsSent: number; ordersClosed: number; revenueGenerated: number; payoutOwed: number };
+  deltas?: { leadsSent: number; ordersClosed: number; revenueGenerated: number; payoutOwed: number };
+  sparks?: { leadsSent: number[]; ordersClosed: number[]; revenueGenerated: number[]; payoutOwed: number[] };
   payoutVisible: boolean;
+  role?: "agency_admin" | "client_member" | "aoc_admin";
 }
 
 interface UiLead {
@@ -166,7 +169,7 @@ function CampaignChip({ campaign, active, onClick }: { campaign: Campaign | unde
   );
 }
 
-function Drawer({ lead, onClose, onSave }: { lead: UiLead | null; onClose: () => void; onSave: (id: string, patch: Partial<UiLead>) => Promise<void> }) {
+function Drawer({ lead, onClose, onSave, audit }: { lead: UiLead | null; onClose: () => void; onSave: (id: string, patch: Partial<UiLead>) => Promise<void>; audit: Array<{ field_changed: string; old_value: string | null; new_value: string | null; user_email: string | null; changed_at: string }> }) {
   const [draft, setDraft] = useState<UiLead | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -250,6 +253,21 @@ function Drawer({ lead, onClose, onSave }: { lead: UiLead | null; onClose: () =>
           </section>
 
           <section>
+            <h3 className="drawer__section-h">Audit trail</h3>
+            <div className="audit">
+              {audit.length === 0 ? (
+                <div style={{ fontSize: 13, color: "var(--app-ink-3)", padding: "8px 0" }}>No edits recorded yet.</div>
+              ) : audit.map((a, i) => (
+                <div className="audit-row" key={i} style={{ display: "grid", gridTemplateColumns: "1fr 2fr auto", gap: 12, fontSize: 13, padding: "6px 0", borderBottom: "1px solid var(--app-line)" }}>
+                  <span style={{ fontWeight: 500 }}>{a.user_email ?? "system"}</span>
+                  <span style={{ color: "var(--app-ink-3)" }}>{a.field_changed}: {a.old_value ?? "—"} → {a.new_value ?? "—"}</span>
+                  <time style={{ color: "var(--app-ink-3)", fontSize: 12 }}>{new Date(a.changed_at).toLocaleString()}</time>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
             <h3 className="drawer__section-h">Timeline</h3>
             <div className="timeline">
               <div className="tl-item tl-item--accent"><div className="tl-title">Introduced to McKenzie</div><div className="tl-meta">{fmtDate(draft.intro)} · via {camp?.name || "Direct"}</div></div>
@@ -280,13 +298,12 @@ function Drawer({ lead, onClose, onSave }: { lead: UiLead | null; onClose: () =>
   );
 }
 
-function TopBar({ client }: { client: { name: string; logoUrl: string | null } }) {
-  const initials = client.name.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+function TopBar({ client }: { client: { name: string; logoUrl: string | null; displayName: string; initials: string } }) {
   return (
     <header className="topbar">
       <div className="topbar__brand">
         <div className="topbar__brand-mark" style={client.logoUrl ? { background: "transparent" } : undefined}>
-          {client.logoUrl ? <img src={client.logoUrl} alt={client.name} /> : initials}
+          {client.logoUrl ? <img src={client.logoUrl} alt={client.name} /> : client.name.split(/\\s+/).slice(0,2).map((w) => w[0]).join("").toUpperCase()}
         </div>
         <span>{client.name}</span>
       </div>
@@ -298,11 +315,13 @@ function TopBar({ client }: { client: { name: string; logoUrl: string | null } }
       </nav>
       <div className="topbar__spacer" />
       <span style={{ fontSize: 11, color: "var(--app-ink-3)", fontWeight: 500, letterSpacing: "0.02em" }}>BY MODERN AMENITIES</span>
-      <div className="topbar__user" title="Sign out">
-        <div className="avatar">A</div>
-        <span>Ahmad</span>
-        <Icons.ChevronDown size={14} />
-      </div>
+      <form action="/api/auth/signout" method="post" style={{ margin: 0 }}>
+        <button type="submit" className="topbar__user" title="Sign out" style={{ background: "none" }}>
+          <div className="avatar">{client.initials}</div>
+          <span>{client.displayName}</span>
+          <Icons.ChevronDown size={14} />
+        </button>
+      </form>
     </header>
   );
 }
@@ -336,6 +355,16 @@ export default function Page() {
   const leads: UiLead[] = useMemo(() => (data?.leads ?? []).map(fromApi), [data]);
   const close = leads.filter((l) => l.status === "green").length;
   const closeRate = leads.length ? Math.round((close / leads.length) * 100) : 0;
+
+  // Logged-in user (for topbar)
+  const [me, setMe] = useState<{ displayName: string; initials: string; email: string; role: string } | null>(null);
+  useEffect(() => { fetch("/api/me").then((r) => r.ok ? r.json().then((j) => setMe(j.user)) : null); }, []);
+  // Audit entries for the open lead
+  const [audit, setAudit] = useState<Array<{ field_changed: string; old_value: string | null; new_value: string | null; user_email: string | null; changed_at: string }>>([]);
+  useEffect(() => {
+    if (!openLead) { setAudit([]); return; }
+    fetch(`/api/leads/${openLead.id}/audit`).then((r) => r.ok ? r.json().then((j) => setAudit(j.entries || [])) : setAudit([]));
+  }, [openLead]);
 
   const accent = data?.accentColor || "#00a7e0";
   const accentVars = useMemo(() => deriveTints(accent), [accent]);
@@ -372,7 +401,7 @@ export default function Page() {
 
   return (
     <div className="app theme-mckenzie" style={accentVars as React.CSSProperties}>
-      <TopBar client={{ name: data?.clientName || "McKenzie SewOn", logoUrl: data?.logoUrl || null }} />
+      <TopBar client={{ name: data?.clientName || "McKenzie SewOn", logoUrl: data?.logoUrl || null, displayName: me?.displayName || "User", initials: me?.initials || "U" }} />
 
       <div className="page">
         <div className="scoreboard">
@@ -392,11 +421,11 @@ export default function Page() {
           </div>
 
           <div className="kpi-grid">
-            <KpiTile label="Leads sent"        value={String(data?.kpis.leadsSent ?? 0)}    accent />
-            <KpiTile label="Orders closed"     value={String(data?.kpis.ordersClosed ?? 0)} deltaLabel={`${closeRate}% of leads · all time`} />
-            <KpiTile label="Revenue generated" value={fmtCurrency(data?.kpis.revenueGenerated ?? 0)} />
+            <KpiTile label="Leads sent"        value={String(data?.kpis.leadsSent ?? 0)}    delta={data?.deltas?.leadsSent ?? null} spark={data?.sparks?.leadsSent} accent />
+            <KpiTile label="Orders closed"     value={String(data?.kpis.ordersClosed ?? 0)} delta={data?.deltas?.ordersClosed ?? null} spark={data?.sparks?.ordersClosed} deltaLabel={`${closeRate}% of leads · vs prev 30d`} />
+            <KpiTile label="Revenue generated" value={fmtCurrency(data?.kpis.revenueGenerated ?? 0)} delta={data?.deltas?.revenueGenerated ?? null} spark={data?.sparks?.revenueGenerated} />
             {data?.payoutVisible
-              ? <KpiTile label="Payout owed" value={fmtCurrency(data.kpis.payoutOwed)} deltaLabel="15% first-order rate" />
+              ? <KpiTile label="Payout owed" value={fmtCurrency(data.kpis.payoutOwed)} delta={data?.deltas?.payoutOwed ?? null} spark={data?.sparks?.payoutOwed} deltaLabel="15% first-order rate" />
               : <KpiTile placeholder label="Payout owed" sub="Hidden for v1 — calculation runs in the background." />}
           </div>
         </div>
@@ -488,7 +517,7 @@ export default function Page() {
         </div>
       </div>
 
-      <Drawer lead={openLead} onClose={() => setOpenLead(null)} onSave={saveLead} />
+      <Drawer lead={openLead} onClose={() => setOpenLead(null)} onSave={saveLead} audit={audit} />
     </div>
   );
 }
