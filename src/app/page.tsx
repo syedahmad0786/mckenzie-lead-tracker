@@ -347,8 +347,22 @@ export default function Page() {
   }
   useEffect(() => {
     load();
-    const t = setInterval(load, 30_000);
-    return () => clearInterval(t);
+    // Real-time: subscribe to any change on `leads` and refresh on push.
+    // Falls back to a 60s safety poll in case the websocket drops.
+    let unsub: (() => void) | null = null;
+    (async () => {
+      try {
+        const { supabaseBrowser } = await import("@/lib/supabase/client");
+        const sb = supabaseBrowser();
+        const ch = sb
+          .channel("leads-rt")
+          .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => load())
+          .subscribe();
+        unsub = () => { sb.removeChannel(ch); };
+      } catch { /* websocket may be blocked — safety poll covers us */ }
+    })();
+    const safety = setInterval(load, 60_000);
+    return () => { clearInterval(safety); if (unsub) unsub(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCampaigns.join(","), activeStatuses.join(","), search, dateRange]);
 
