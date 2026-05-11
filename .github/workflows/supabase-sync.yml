@@ -1,17 +1,20 @@
-name: Sheets → Supabase poll (every 5 min)
+name: Sheets → Supabase sync (every 5 min)
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # every 5 minutes
-  workflow_dispatch:        # also runnable manually
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 jobs:
-  poll:
+  sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Hit n8n sheets-poll webhook
+      - name: Hit /api/sync/sheets
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -fsS -X POST "https://n8n.aimanagingservices.com/webhook/lead-tracker-sheets-poll" \
+          curl -fsS -X POST "https://mckenzie-lead-tracker.vercel.app/api/sync/sheets" \
+            -H "x-cron-secret: $CRON_SECRET" \
             -H "Content-Type: application/json" \
-            -d '{"source":"github-actions"}'
+            -d '{}'
           echo ""

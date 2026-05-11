@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseMiddleware } from "@/lib/supabase";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/auth/callback", "/api/instantly", "/api/typeform"];
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/auth/callback", "/api/instantly", "/api/typeform", "/api/sync"];
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
