@@ -1,23 +1,17 @@
-name: Daily Digest Trigger
-
-# Phase 1: Supabase sync deferred. This workflow now triggers the n8n
-# daily-digest scenario instead of resyncing the (no longer existent) Supabase mirror.
-# When Phase 2 lands, restore the original supabase-sync.yml from git history.
+name: Sheets → Supabase poll (every 5 min)
 
 on:
   schedule:
-    - cron: "0 14 * * *"   # 9am ET / 8am CT every day
-  workflow_dispatch:
+    - cron: "*/5 * * * *"   # every 5 minutes
+  workflow_dispatch:        # also runnable manually
 
 jobs:
-  trigger-digest:
+  poll:
     runs-on: ubuntu-latest
     steps:
-      - name: Hit n8n daily-digest webhook
-        env:
-          N8N_DAILY_DIGEST_WEBHOOK: ${{ secrets.N8N_DAILY_DIGEST_WEBHOOK }}
-          N8N_TRIGGER_SECRET:        ${{ secrets.N8N_TRIGGER_SECRET }}
+      - name: Hit n8n sheets-poll webhook
         run: |
-          curl -fsS -X POST \
-            -H "x-trigger-secret: $N8N_TRIGGER_SECRET" \
-            "$N8N_DAILY_DIGEST_WEBHOOK"
+          curl -fsS -X POST "https://n8n.aimanagingservices.com/webhook/lead-tracker-sheets-poll" \
+            -H "Content-Type: application/json" \
+            -d '{"source":"github-actions"}'
+          echo ""
