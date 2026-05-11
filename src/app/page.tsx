@@ -28,12 +28,15 @@ const UI_TO_API: Record<StatusUI, StatusAPI> = {
 
 interface Campaign { id: string; name: string; dot: string }
 const CAMPAIGNS: Campaign[] = [
-  { id: "tourist-gift-shop",   name: "Tourist Gift Shop",   dot: "#0EA5E9" },
-  { id: "museum-donors",       name: "Museum Donors",       dot: "#A855F7" },
-  { id: "acquisitions",        name: "Acquisitions",        dot: "#F97316" },
-  { id: "construction",        name: "Construction",        dot: "#EAB308" },
-  { id: "banks-credit-unions", name: "Banks & Credit Unions", dot: "#10B981" },
-  { id: "schools",             name: "Schools",             dot: "#EF4444" },
+  { id: "tourist-gift-shop",     name: "Tourist Gift Shop",     dot: "#0EA5E9" },
+  { id: "museum-donors",         name: "Museum Donors",         dot: "#A855F7" },
+  { id: "acquisitions",          name: "Acquisitions",          dot: "#F97316" },
+  { id: "construction",          name: "Construction",          dot: "#EAB308" },
+  { id: "construction-tier-1",   name: "Construction Tier 1",   dot: "#F59E0B" },
+  { id: "construction-tier-2",   name: "Construction Tier 2",   dot: "#D97706" },
+  { id: "construction-tier-3",   name: "Construction Tier 3",   dot: "#B45309" },
+  { id: "banks-credit-unions",   name: "Banks & Credit Unions", dot: "#10B981" },
+  { id: "schools",               name: "Schools",               dot: "#EF4444" },
 ];
 const CAMPAIGN_BY_ID = Object.fromEntries(CAMPAIGNS.map((c) => [c.id, c]));
 

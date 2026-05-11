@@ -55,6 +55,27 @@ export async function POST(req: NextRequest) {
     out.push(cur); return out;
   };
   const headers = parseLine(lines[0]);
+  // Auto-detect a campaign column the moment Make adds one — try common header names.
+  // Falls back to 'construction' for legacy rows (matches the only active scenario at backfill time).
+  const CAMPAIGN_HEADERS = ["Campaign", "Campaign Name", "Source", "Campaign Source", "Workflow"];
+  const campaignColIdx = headers.findIndex((h) => CAMPAIGN_HEADERS.includes(h.trim()));
+  const slugify = (s: string) => s.toLowerCase().trim()
+    .replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  // Map common sheet values → our Supabase campaign IDs
+  const CAMPAIGN_MAP: Record<string, string> = {
+    "construction":          "construction",
+    "construction-tier-1":   "construction-tier-1",
+    "construction-tier-2":   "construction-tier-2",
+    "construction-tier-3":   "construction-tier-3",
+    "tourist-gift-shop":     "tourist-gift-shop",
+    "tourist":               "tourist-gift-shop",
+    "tourist-campaign":      "tourist-gift-shop",
+    "museum-donors":         "museum-donors",
+    "acquisitions":          "acquisitions",
+    "banks-and-credit-unions":"banks-credit-unions",
+    "banks":                  "banks-credit-unions",
+    "schools":                "schools",
+  };
   const seen = new Set<string>();
   const sheetLeads: Array<{
     email: string;
@@ -62,6 +83,7 @@ export async function POST(req: NextRequest) {
     company: string | null;
     date_introduced: string;
     form_submitted: string;
+    campaign_id: string;
   }> = [];
 
   for (let i = 1; i < lines.length; i++) {
@@ -72,11 +94,20 @@ export async function POST(req: NextRequest) {
     seen.add(email);
     const name = [row["First Name"], row["Last Name"]].filter(Boolean).join(" ") || null;
     const date = (row["Form Sent At"] || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
+    let campaign_id = "construction"; // default for legacy rows
+    if (campaignColIdx >= 0) {
+      const raw = (cols[campaignColIdx] || "").trim();
+      if (raw) {
+        const slug = slugify(raw);
+        campaign_id = CAMPAIGN_MAP[slug] ?? slug; // unknown values still pass through as a slug
+      }
+    }
     sheetLeads.push({
       email, contact_name: name,
       company: row.Company || null,
       date_introduced: date,
       form_submitted: row["Form Submitted"] || "No",
+      campaign_id,
     });
   }
 
@@ -95,13 +126,13 @@ export async function POST(req: NextRequest) {
   // 4) Insert
   const rows = fresh.map((l) => ({
     client_id: "mckenzie",
-    campaign_id: "construction",
+    campaign_id: l.campaign_id,
     email: l.email,
     contact_name: l.contact_name,
     company: l.company,
     date_introduced: l.date_introduced,
     status: "not_yet_closed" as const,
-    notes: `Auto-imported from Sheets. Form Submitted: ${l.form_submitted}.`,
+    notes: `Auto-imported from Sheets. Campaign: ${l.campaign_id}. Form Submitted: ${l.form_submitted}.`,
   }));
   const { error } = await sb.from("leads").insert(rows);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
