@@ -61,7 +61,7 @@ export default function SettingsPage() {
     <div className="app theme-mckenzie" style={{ "--accent": client.accent } as React.CSSProperties}>
       <header className="topbar">
         <div className="topbar__brand">
-          <div className="topbar__brand-mark">MS</div>
+          <div className="topbar__brand-mark" style={{ background: "transparent" }}><img src="/mckenzie-logo.png" alt="McKenzie SewOn" style={{ width: "100%", height: "100%", objectFit: "contain" }} /></div>
           <span>McKenzie SewOn</span>
         </div>
         <span className="topbar__divider" />
@@ -71,7 +71,7 @@ export default function SettingsPage() {
           <a className="is-active">Settings</a>
         </nav>
         <div className="topbar__spacer" />
-        <span style={{ fontSize: 11, color: "var(--app-ink-3)", fontWeight: 500, letterSpacing: "0.02em" }}>BY MODERN AMENITIES</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--app-ink-3)", fontWeight: 500, letterSpacing: "0.02em" }}><img src="/ma-logo.png" alt="" style={{ width: 14, height: 14, borderRadius: 3, objectFit: "cover" }} /> BY MODERN AMENITIES</span>
       </header>
 
       <div className="page settings-page">

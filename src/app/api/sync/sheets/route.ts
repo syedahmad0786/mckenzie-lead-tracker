@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -7,13 +7,30 @@ export const maxDuration = 60;
 const SHEET_ID = "1VV44N1sURf5RJEZGo49l-VEtGBDi8LlNQWli65GlItU";
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1`;
 
-/** Sheets → Supabase poll. Called every 5 min by GitHub Actions.
- *  Auth: x-cron-secret header (or pass it as ?secret=…). */
-export async function POST(req: NextRequest) {
+/**
+ * Sheets → Supabase poll.
+ * Auth: EITHER `x-cron-secret` header (for GH Actions cron),
+ *       OR an authenticated agency_admin/aoc_admin user session (for the dashboard button).
+ */
+async function authorize(req: NextRequest): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const secret = req.headers.get("x-cron-secret") ?? new URL(req.url).searchParams.get("secret");
-  if (!secret || secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (secret && secret === process.env.CRON_SECRET) return { ok: true };
+
+  const sb = await supabaseServer();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return { ok: false, status: 401, error: "unauthorized" };
+
+  const sba = supabaseAdmin();
+  const { data: profile } = await sba.from("profiles").select("role").eq("user_id", user.id).maybeSingle();
+  if (!profile || !["agency_admin", "aoc_admin"].includes(profile.role)) {
+    return { ok: false, status: 403, error: "forbidden — agency_admin only" };
   }
+  return { ok: true };
+}
+
+export async function POST(req: NextRequest) {
+  const auth = await authorize(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const t0 = Date.now();
 
@@ -24,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   // 2) Parse CSV (handles quotes, commas-in-quotes, doubled-quote escape)
   const lines = csv.split(/\r?\n/).filter((l) => l.length);
-  if (!lines.length) return NextResponse.json({ ok: true, parsed: 0 });
+  if (!lines.length) return NextResponse.json({ ok: true, parsed: 0, inserted: 0 });
   const parseLine = (l: string): string[] => {
     const out: string[] = [];
     let cur = "", inQ = false;
@@ -63,20 +80,19 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 3) Get existing emails in Supabase
+  // 3) Diff against Supabase
   const sb = supabaseAdmin();
   const { data: existingRows } = await sb.from("leads").select("email").eq("client_id", "mckenzie");
   const existing = new Set((existingRows ?? []).map((r) => (r.email || "").toLowerCase()));
-
-  // 4) Diff
   const fresh = sheetLeads.filter((l) => !existing.has(l.email));
+
   if (fresh.length === 0) {
     return NextResponse.json({
       ok: true, parsed: sheetLeads.length, existing: existing.size, inserted: 0, durationMs: Date.now() - t0,
     });
   }
 
-  // 5) Insert
+  // 4) Insert
   const rows = fresh.map((l) => ({
     client_id: "mckenzie",
     campaign_id: "construction",
@@ -100,7 +116,4 @@ export async function POST(req: NextRequest) {
   });
 }
 
-/** Allow a manual GET probe for sanity (still needs the secret). */
-export async function GET(req: NextRequest) {
-  return POST(req);
-}
+export async function GET(req: NextRequest) { return POST(req); }

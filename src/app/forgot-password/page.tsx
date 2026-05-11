@@ -27,7 +27,7 @@ export default function ForgotPassword() {
     <div className="login">
       <div className="login__left">
         <div className="login__brand">
-          <div className="login__brand-mark">MS</div>
+          <div className="login__brand-mark" style={{ background: "transparent", padding: 4 }}><img src="/mckenzie-logo.png" alt="McKenzie SewOn" style={{ width: "100%", height: "100%", objectFit: "contain" }} /></div>
           <div>
             <div className="login__brand-name">McKenzie SewOn</div>
             <div className="login__brand-sub">LEAD TRACKER</div>
@@ -48,7 +48,7 @@ export default function ForgotPassword() {
           </form>
           <div className="login__alt-actions"><a href="/login">Back to sign in</a></div>
         </div>
-        <div className="login__footer"><span className="login__footer-mark">M</span>Powered by Modern Amenities · AOC Operator Network</div>
+        <div className="login__footer"><img src="/ma-logo.png" alt="" className="login__footer-mark" style={{ background: "transparent", objectFit: "cover" }} />Powered by Modern Amenities · AOC Operator Network</div>
       </div>
       <aside className="login__right">
         <div className="login__right-eyebrow">RESET</div>

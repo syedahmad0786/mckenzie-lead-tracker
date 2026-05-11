@@ -98,6 +98,7 @@ const Icons = {
   Download:  ({ size = 14 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><path d="M12 15V3" /></svg>,
   FileText:  ({ size = 14 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>,
   X:         ({ size = 14 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>,
+  RefreshCw: ({ size = 14, className }: { size?: number; className?: string }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>,
 };
 
 function Sparkline({ data, color = "currentColor", width = 96, height = 28 }: { data: number[]; color?: string; width?: number; height?: number }) {
@@ -314,7 +315,10 @@ function TopBar({ client }: { client: { name: string; logoUrl: string | null; di
         <a>Settings</a>
       </nav>
       <div className="topbar__spacer" />
-      <span style={{ fontSize: 11, color: "var(--app-ink-3)", fontWeight: 500, letterSpacing: "0.02em" }}>BY MODERN AMENITIES</span>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--app-ink-3)", fontWeight: 500, letterSpacing: "0.02em" }}>
+        <img src="/ma-logo.png" alt="" style={{ width: 14, height: 14, borderRadius: 3, objectFit: "cover" }} />
+        BY MODERN AMENITIES
+      </span>
       <form action="/api/auth/signout" method="post" style={{ margin: 0 }}>
         <button type="submit" className="topbar__user" title="Sign out" style={{ background: "none" }}>
           <div className="avatar">{client.initials}</div>
@@ -329,6 +333,24 @@ function TopBar({ client }: { client: { name: string; logoUrl: string | null; di
 export default function Page() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [openLead, setOpenLead] = useState<UiLead | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  async function resync() {
+    setSyncing(true);
+    setSyncMsg("Pulling from Sheets…");
+    try {
+      const res = await fetch("/api/sync/sheets", { method: "POST", credentials: "include" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "sync failed");
+      setSyncMsg(`✓ Parsed ${j.parsed}, inserted ${j.inserted} new (${j.durationMs}ms)`);
+      await load();
+    } catch (e) {
+      setSyncMsg("✗ " + (e instanceof Error ? e.message : "sync failed"));
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMsg(null), 6000);
+    }
+  }
   const [activeCampaigns, setActiveCampaigns] = useState<string[]>([]);
   const [activeStatuses, setActiveStatuses] = useState<StatusUI[]>([]);
   const [search, setSearch] = useState("");
@@ -428,7 +450,11 @@ export default function Page() {
                   : "loading…"}
               </div>
             </div>
-            <div className="page-head__actions" style={{ display: "flex", gap: 8 }}>
+            <div className="page-head__actions" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {syncMsg && <span style={{ fontSize: 12, color: syncMsg.startsWith("✓") ? "var(--st-green)" : syncMsg.startsWith("✗") ? "var(--st-red)" : "var(--app-ink-3)" }}>{syncMsg}</span>}
+              <button className="btn btn--sm" onClick={resync} disabled={syncing} title="Re-pull from Google Sheets now">
+                <Icons.RefreshCw size={14} className={syncing ? "spin" : ""} /> {syncing ? "Syncing…" : "Re-sync"}
+              </button>
               <button className="btn btn--sm" onClick={exportCsv}><Icons.Download size={14} /> Export CSV</button>
               <button className="btn btn--sm"><Icons.FileText size={14} /> PDF report</button>
             </div>
