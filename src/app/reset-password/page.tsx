@@ -29,7 +29,7 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="login">
+    <div className="login theme-mckenzie">
       <div className="login__left">
         <div className="login__brand">
           <div className="login__brand-mark" style={{ background: "transparent", padding: 4 }}><img src="/mckenzie-logo.png" alt="McKenzie SewOn" style={{ width: "100%", height: "100%", objectFit: "contain" }} /></div>

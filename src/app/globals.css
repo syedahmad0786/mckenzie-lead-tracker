@@ -1658,3 +1658,62 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
    ============================================================ */
 @keyframes lt-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
 .spin { animation: lt-spin 0.9s linear infinite; transform-origin: 50% 50%; }
+
+/* ============================================================
+   McKenzie SewOn — real brand tokens scraped from mcsewon.com
+   Source: et-divi-customizer-global.min.css
+   - Primary: #00a7e0 (used 13× in their CSS)
+   - Hover:   #00a7e1
+   - Text:    #222222 (used 10×)
+   - Font:    Archivo Narrow (linked in their <head>)
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@400;500;700&display=swap');
+
+.theme-mckenzie {
+  --accent:        #00a7e0;
+  --accent-deep:   #0088b8;        /* derived deeper variant for hovers */
+  --accent-tint:   rgba(0, 167, 224, 0.10);
+  --accent-tint-2: rgba(0, 167, 224, 0.22);
+  --accent-ink:    #ffffff;
+
+  /* Override the operational ink scale with McKenzie's exact text color */
+  --app-ink-1:     #222222;        /* their actual heading/body color */
+  --app-ink-2:     #3a3a3a;        /* slightly lighter for secondary */
+}
+
+/* Display headlines on McKenzie surfaces use Archivo Narrow — matches their site */
+.theme-mckenzie .topbar__brand,
+.theme-mckenzie .page-head__title,
+.theme-mckenzie .login__h1,
+.theme-mckenzie .login__right-h,
+.theme-mckenzie .settings-panel__h,
+.theme-mckenzie .kpi__value,
+.theme-mckenzie .login__right-eyebrow {
+  font-family: 'Archivo Narrow', 'Archivo', sans-serif;
+  letter-spacing: -0.005em;
+}
+
+/* The McKenzie brand mark sizes a wordmark (350×71 aspect) better as a wider pill */
+.theme-mckenzie .topbar__brand-mark {
+  width: 96px;     /* wider to host the wordmark */
+  height: 28px;
+  padding: 2px 4px;
+  background: transparent;
+}
+.theme-mckenzie .topbar__brand-mark img { object-fit: contain; }
+
+/* Don't double-show the wordmark — hide the text "McKenzie SewOn" next to it
+   since the wordmark already says it */
+.theme-mckenzie .topbar__brand > span { display: none; }
+
+/* Login left-side brand mark also gets wider treatment for the wordmark */
+.theme-mckenzie .login__brand-mark {
+  width: 120px;
+  height: 32px;
+  border-radius: 6px;
+  padding: 2px 6px;
+  background: transparent;
+}
+/* And the "McKenzie SewOn / LEAD TRACKER" label next to it then becomes redundant — hide name, keep sub */
+.theme-mckenzie .login__brand-name { display: none; }
+.theme-mckenzie .login__brand-sub  { font-size: 12px; letter-spacing: 0.18em; }
