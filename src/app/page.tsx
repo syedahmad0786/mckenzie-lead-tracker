@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 
 // =====================================================================
 // Lead Tracker — McKenzie SewOn × Modern Amenities
@@ -28,15 +29,12 @@ const UI_TO_API: Record<StatusUI, StatusAPI> = {
 
 interface Campaign { id: string; name: string; dot: string }
 const CAMPAIGNS: Campaign[] = [
-  { id: "tourist-gift-shop",     name: "Tourist Gift Shop",     dot: "#0EA5E9" },
-  { id: "museum-donors",         name: "Museum Donors",         dot: "#A855F7" },
-  { id: "acquisitions",          name: "Acquisitions",          dot: "#F97316" },
-  { id: "construction",          name: "Construction",          dot: "#EAB308" },
-  { id: "construction-tier-1",   name: "Construction Tier 1",   dot: "#F59E0B" },
-  { id: "construction-tier-2",   name: "Construction Tier 2",   dot: "#D97706" },
-  { id: "construction-tier-3",   name: "Construction Tier 3",   dot: "#B45309" },
-  { id: "banks-credit-unions",   name: "Banks & Credit Unions", dot: "#10B981" },
-  { id: "schools",               name: "Schools",               dot: "#EF4444" },
+  { id: "tourist-gift-shop",   name: "Tourist Gift Shop",   dot: "#0EA5E9" },
+  { id: "museum-donors",       name: "Museum Donors",       dot: "#A855F7" },
+  { id: "acquisitions",        name: "Acquisitions",        dot: "#F97316" },
+  { id: "construction",        name: "Construction",        dot: "#EAB308" },
+  { id: "banks-credit-unions", name: "Banks & Credit Unions", dot: "#10B981" },
+  { id: "schools",             name: "Schools",             dot: "#EF4444" },
 ];
 const CAMPAIGN_BY_ID = Object.fromEntries(CAMPAIGNS.map((c) => [c.id, c]));
 
@@ -101,7 +99,6 @@ const Icons = {
   Download:  ({ size = 14 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><path d="M12 15V3" /></svg>,
   FileText:  ({ size = 14 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>,
   X:         ({ size = 14 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>,
-  RefreshCw: ({ size = 14, className }: { size?: number; className?: string }) => <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>,
 };
 
 function Sparkline({ data, color = "currentColor", width = 96, height = 28 }: { data: number[]; color?: string; width?: number; height?: number }) {
@@ -302,33 +299,101 @@ function Drawer({ lead, onClose, onSave, audit }: { lead: UiLead | null; onClose
   );
 }
 
-function TopBar({ client }: { client: { name: string; logoUrl: string | null; displayName: string; initials: string } }) {
+function TopBar({ client }: { client: { name: string; logoUrl: string | null; displayName: string; initials: string; email?: string } }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setMenuOpen(false); }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  async function handleSignOut() {
+    setMenuOpen(false);
+    try {
+      const res = await fetch("/api/auth/signout", { method: "POST", headers: { Accept: "application/json" } });
+      // Whether the response is a redirect or JSON, just send the user to /login.
+      if (!res.ok && res.status !== 303) {
+        console.warn("signout returned", res.status);
+      }
+    } catch (err) {
+      console.warn("signout error", err);
+    }
+    window.location.href = "/login";
+  }
+
   return (
     <header className="topbar">
       <div className="topbar__brand">
         <div className="topbar__brand-mark" style={client.logoUrl ? { background: "transparent" } : undefined}>
-          {client.logoUrl ? <img src={client.logoUrl} alt={client.name} /> : client.name.split(/\\s+/).slice(0,2).map((w) => w[0]).join("").toUpperCase()}
+          {client.logoUrl ? <img src={client.logoUrl} alt={client.name} /> : client.name.split(/\s+/).slice(0,2).map((w) => w[0]).join("").toUpperCase()}
         </div>
         <span>{client.name}</span>
       </div>
       <span className="topbar__divider" />
       <div className="topbar__crumb">Lead Tracker · <b>Agency view</b></div>
       <nav className="topbar__nav">
-        <a className="is-active">Dashboard</a>
-        <a>Settings</a>
+        <Link href="/" className="is-active">Dashboard</Link>
+        <Link href="/settings">Settings</Link>
       </nav>
       <div className="topbar__spacer" />
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--app-ink-3)", fontWeight: 500, letterSpacing: "0.02em" }}>
-        <img src="/ma-logo.png" alt="" style={{ width: 14, height: 14, borderRadius: 3, objectFit: "cover" }} />
-        BY MODERN AMENITIES
-      </span>
-      <form action="/api/auth/signout" method="post" style={{ margin: 0 }}>
-        <button type="submit" className="topbar__user" title="Sign out" style={{ background: "none" }}>
+      <span style={{ fontSize: 11, color: "var(--app-ink-3)", fontWeight: 500, letterSpacing: "0.02em" }}>BY MODERN AMENITIES</span>
+      <div ref={menuRef} style={{ position: "relative" }}>
+        <button
+          type="button"
+          className="topbar__user"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((v) => !v)}
+          style={{ background: "none", border: 0, cursor: "pointer" }}
+        >
           <div className="avatar">{client.initials}</div>
           <span>{client.displayName}</span>
           <Icons.ChevronDown size={14} />
         </button>
-      </form>
+        {menuOpen && (
+          <div
+            role="menu"
+            style={{
+              position: "absolute", right: 0, top: "calc(100% + 6px)", minWidth: 220,
+              background: "var(--app-surface-1, #fff)",
+              border: "1px solid var(--app-line-2, #E5E7EB)",
+              borderRadius: 10, boxShadow: "0 10px 28px rgba(15,23,42,.12)",
+              padding: 6, zIndex: 50,
+            }}
+          >
+            <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--app-ink-3)", borderBottom: "1px solid var(--app-line-2,#eef0f3)" }}>
+              <div style={{ fontWeight: 600, color: "var(--app-ink-1)" }}>{client.displayName}</div>
+              {client.email && <div style={{ marginTop: 2 }}>{client.email}</div>}
+            </div>
+            <Link
+              href="/settings"
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              style={{ display: "block", padding: "10px 12px", borderRadius: 8, fontSize: 13, color: "var(--app-ink-1)", textDecoration: "none" }}
+            >
+              Settings
+            </Link>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={handleSignOut}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 8, fontSize: 13, color: "var(--app-ink-1)", background: "none", border: 0, cursor: "pointer" }}
+            >
+              Sign out
+            </button>
+          </div>
+        )}
+      </div>
     </header>
   );
 }
@@ -336,24 +401,6 @@ function TopBar({ client }: { client: { name: string; logoUrl: string | null; di
 export default function Page() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [openLead, setOpenLead] = useState<UiLead | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState<string | null>(null);
-  async function resync() {
-    setSyncing(true);
-    setSyncMsg("Pulling from Sheets…");
-    try {
-      const res = await fetch("/api/sync/sheets", { method: "POST", credentials: "include" });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || "sync failed");
-      setSyncMsg(`✓ Parsed ${j.parsed}, inserted ${j.inserted} new (${j.durationMs}ms)`);
-      await load();
-    } catch (e) {
-      setSyncMsg("✗ " + (e instanceof Error ? e.message : "sync failed"));
-    } finally {
-      setSyncing(false);
-      setTimeout(() => setSyncMsg(null), 6000);
-    }
-  }
   const [activeCampaigns, setActiveCampaigns] = useState<string[]>([]);
   const [activeStatuses, setActiveStatuses] = useState<StatusUI[]>([]);
   const [search, setSearch] = useState("");
@@ -440,7 +487,7 @@ export default function Page() {
 
   return (
     <div className="app theme-mckenzie" style={accentVars as React.CSSProperties}>
-      <TopBar client={{ name: data?.clientName || "McKenzie SewOn", logoUrl: data?.logoUrl || null, displayName: me?.displayName || "User", initials: me?.initials || "U" }} />
+      <TopBar client={{ name: data?.clientName || "McKenzie SewOn", logoUrl: data?.logoUrl || null, displayName: me?.displayName || "User", initials: me?.initials || "U", email: me?.email }} />
 
       <div className="page">
         <div className="scoreboard">
@@ -453,11 +500,7 @@ export default function Page() {
                   : "loading…"}
               </div>
             </div>
-            <div className="page-head__actions" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {syncMsg && <span style={{ fontSize: 12, color: syncMsg.startsWith("✓") ? "var(--st-green)" : syncMsg.startsWith("✗") ? "var(--st-red)" : "var(--app-ink-3)" }}>{syncMsg}</span>}
-              <button className="btn btn--sm" onClick={resync} disabled={syncing} title="Re-pull from Google Sheets now">
-                <Icons.RefreshCw size={14} className={syncing ? "spin" : ""} /> {syncing ? "Syncing…" : "Re-sync"}
-              </button>
+            <div className="page-head__actions" style={{ display: "flex", gap: 8 }}>
               <button className="btn btn--sm" onClick={exportCsv}><Icons.Download size={14} /> Export CSV</button>
               <button className="btn btn--sm"><Icons.FileText size={14} /> PDF report</button>
             </div>

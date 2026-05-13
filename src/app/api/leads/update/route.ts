@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseServer, supabaseAdmin } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity";
 
 export const runtime = "nodejs";
 
@@ -55,6 +56,13 @@ export async function POST(req: NextRequest) {
     const { error: e2 } = await sbAdmin.from("leads").update(patch).eq("id", row.id);
     if (e2) return NextResponse.json({ error: e2.message }, { status: 500 });
   }
+
+  await logActivity(req, {
+    action: "lead.update",
+    target_type: "lead",
+    target_id: row.id,
+    metadata: { fields: Object.keys(patch) },
+  });
 
   return NextResponse.json({ success: true });
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
+import { logActivity } from "@/lib/activity";
 
 const schema = z.object({
   name: z.string().min(1).optional(),
@@ -28,5 +29,16 @@ export async function POST(req: NextRequest) {
   const clientId = profile.client_id ?? "mckenzie";
   const { error } = await sba.from("clients").update(parsed.data).eq("id", clientId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Note: the activity_log trigger trg_clients_activity ALSO fires here from the
+  // DB side. This log call adds the API-layer view (which user, which fields)
+  // alongside the trigger's row-level diff.
+  await logActivity(req, {
+    action: "settings.update",
+    target_type: "client",
+    target_id: clientId,
+    metadata: { fields: Object.keys(parsed.data) },
+  });
+
   return NextResponse.json({ success: true });
 }

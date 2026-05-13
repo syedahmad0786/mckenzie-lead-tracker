@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 const SECTIONS = [
@@ -61,17 +62,17 @@ export default function SettingsPage() {
     <div className="app theme-mckenzie" style={{ "--accent": client.accent } as React.CSSProperties}>
       <header className="topbar">
         <div className="topbar__brand">
-          <div className="topbar__brand-mark" style={{ background: "transparent" }}><img src="/mckenzie-logo.png" alt="McKenzie SewOn" style={{ width: "100%", height: "100%", objectFit: "contain" }} /></div>
+          <div className="topbar__brand-mark">MS</div>
           <span>McKenzie SewOn</span>
         </div>
         <span className="topbar__divider" />
         <div className="topbar__crumb">Lead Tracker · <b>Agency view</b></div>
         <nav className="topbar__nav">
-          <a href="/">Dashboard</a>
-          <a className="is-active">Settings</a>
+          <Link href="/">Dashboard</Link>
+          <Link href="/settings" className="is-active">Settings</Link>
         </nav>
         <div className="topbar__spacer" />
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--app-ink-3)", fontWeight: 500, letterSpacing: "0.02em" }}><img src="/ma-logo.png" alt="" style={{ width: 14, height: 14, borderRadius: 3, objectFit: "cover" }} /> BY MODERN AMENITIES</span>
+        <span style={{ fontSize: 11, color: "var(--app-ink-3)", fontWeight: 500, letterSpacing: "0.02em" }}>BY MODERN AMENITIES</span>
       </header>
 
       <div className="page settings-page">
@@ -171,11 +172,7 @@ export default function SettingsPage() {
             )}
 
             {active === "users" && (
-              <div>
-                <h2 className="settings-panel__h">Users & roles</h2>
-                <p className="settings-panel__sub">Invitations + email verification handled by Supabase Auth. Self-signup at /signup.</p>
-                <p style={{ fontSize: 13 }}>Roles: <code>agency_admin</code>, <code>client_member</code>, <code>aoc_admin</code>.</p>
-              </div>
+              <UsersPanel />
             )}
 
             {active === "integrations" && (
@@ -194,6 +191,221 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Users & roles panel
+// ---------------------------------------------------------------------------
+
+type Role = "agency_admin" | "client_member" | "aoc_admin";
+
+interface UserRow {
+  user_id: string;
+  email: string;
+  display_name: string | null;
+  role: Role;
+  client_id: string | null;
+  profile_created_at: string | null;
+  last_activity_at: string | null;
+  total_actions: number | null;
+}
+
+const ROLE_LABELS: Record<Role, string> = {
+  agency_admin: "Agency admin",
+  client_member: "Client member",
+  aoc_admin: "AOC admin",
+};
+
+function UsersPanel() {
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [degraded, setDegraded] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<Role>("client_member");
+  const [busy, setBusy] = useState(false);
+  const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  async function loadUsers() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/users", { headers: { Accept: "application/json" } });
+      const json = await res.json();
+      if (!res.ok) {
+        setBanner({ kind: "err", text: json.error || "failed to load users" });
+        return;
+      }
+      setUsers(json.users || []);
+      setDegraded(json.degraded ? (json.message || null) : null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void loadUsers(); }, []);
+
+  async function invite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email) return;
+    setBusy(true);
+    setBanner(null);
+    try {
+      const res = await fetch("/api/admin/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, display_name: name || undefined, role }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setBanner({ kind: "err", text: json.error || "invite failed" });
+      } else if (json.preexisting) {
+        setBanner({ kind: "ok", text: `${email} already had an account — role updated.` });
+      } else {
+        setBanner({ kind: "ok", text: `Invite sent to ${email}.` });
+        setEmail("");
+        setName("");
+      }
+      await loadUsers();
+    } catch (err) {
+      setBanner({ kind: "err", text: String(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeRole(user_id: string, newRole: Role) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id, role: newRole }),
+      });
+      const json = await res.json();
+      if (!res.ok) setBanner({ kind: "err", text: json.error || "update failed" });
+      else setBanner({ kind: "ok", text: "Role updated." });
+      await loadUsers();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeUser(user_id: string, email: string) {
+    if (!confirm(`Remove ${email}? They will lose access immediately.`)) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/users?id=${encodeURIComponent(user_id)}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) setBanner({ kind: "err", text: json.error || "remove failed" });
+      else setBanner({ kind: "ok", text: `Removed ${email}.` });
+      await loadUsers();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <h2 className="settings-panel__h">Users & roles</h2>
+      <p className="settings-panel__sub">
+        Invite colleagues by email. They&apos;ll get a magic link that confirms their account and signs them in.
+        Roles: <code>agency_admin</code> (full access), <code>client_member</code> (read + status edit), <code>aoc_admin</code> (cross-tenant).
+      </p>
+
+      {degraded && (
+        <div style={{ padding: 12, marginBottom: 12, borderRadius: 8, background: "#FFF7ED", border: "1px solid #FED7AA", fontSize: 13 }}>
+          {degraded}
+        </div>
+      )}
+      {banner && (
+        <div style={{
+          padding: 10, marginBottom: 12, borderRadius: 8, fontSize: 13,
+          background: banner.kind === "ok" ? "#ECFDF5" : "#FEF2F2",
+          border: banner.kind === "ok" ? "1px solid #A7F3D0" : "1px solid #FECACA",
+          color: banner.kind === "ok" ? "#065F46" : "#991B1B",
+        }}>
+          {banner.text}
+        </div>
+      )}
+
+      <form onSubmit={invite} style={{ display: "grid", gap: 12, gridTemplateColumns: "minmax(220px,1fr) minmax(180px,1fr) 200px auto", alignItems: "end", marginBottom: 24, padding: 16, border: "1px solid var(--app-line,#E5E7EB)", borderRadius: 10 }}>
+        <div className="settings-panel__field" style={{ margin: 0 }}>
+          <label>Work email<small>An invitation email will be sent here.</small></label>
+          <input type="email" required className="input" placeholder="colleague@modern-amenities.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div className="settings-panel__field" style={{ margin: 0 }}>
+          <label>Display name<small>Optional. Defaults to the email handle.</small></label>
+          <input className="input" placeholder="Jane Doe" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="settings-panel__field" style={{ margin: 0 }}>
+          <label>Role</label>
+          <select className="input" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+            <option value="client_member">Client member</option>
+            <option value="agency_admin">Agency admin</option>
+            <option value="aoc_admin">AOC admin</option>
+          </select>
+        </div>
+        <button type="submit" className="btn btn--primary" disabled={busy || !email}>
+          {busy ? "Sending…" : "Send invite"}
+        </button>
+      </form>
+
+      <div style={{ border: "1px solid var(--app-line,#E5E7EB)", borderRadius: 10, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(180px,2fr) 1fr 1fr 1fr 110px", padding: "10px 14px", background: "var(--app-surface-2,#F9FAFB)", fontSize: 12, fontWeight: 600, color: "var(--app-ink-3,#6B7280)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+          <div>User</div>
+          <div>Role</div>
+          <div>Joined</div>
+          <div>Last active</div>
+          <div style={{ textAlign: "right" }}>Actions</div>
+        </div>
+        {loading ? (
+          <div style={{ padding: 16, fontSize: 13, color: "var(--app-ink-3)" }}>Loading users…</div>
+        ) : users.length === 0 ? (
+          <div style={{ padding: 16, fontSize: 13, color: "var(--app-ink-3)" }}>No users yet. Invite your first colleague above.</div>
+        ) : users.map((u) => (
+          <div key={u.user_id} style={{ display: "grid", gridTemplateColumns: "minmax(180px,2fr) 1fr 1fr 1fr 110px", padding: "12px 14px", borderTop: "1px solid var(--app-line,#E5E7EB)", alignItems: "center", fontSize: 13 }}>
+            <div>
+              <div style={{ fontWeight: 600 }}>{u.display_name || u.email.split("@")[0]}</div>
+              <div style={{ color: "var(--app-ink-3,#6B7280)", fontSize: 12 }}>{u.email}</div>
+            </div>
+            <div>
+              <select
+                value={u.role}
+                onChange={(e) => changeRole(u.user_id, e.target.value as Role)}
+                disabled={busy}
+                style={{ fontSize: 12, padding: "4px 6px", border: "1px solid var(--app-line,#E5E7EB)", borderRadius: 6, background: "white" }}
+              >
+                <option value="client_member">{ROLE_LABELS.client_member}</option>
+                <option value="agency_admin">{ROLE_LABELS.agency_admin}</option>
+                <option value="aoc_admin">{ROLE_LABELS.aoc_admin}</option>
+              </select>
+            </div>
+            <div style={{ color: "var(--app-ink-3,#6B7280)" }}>
+              {u.profile_created_at ? new Date(u.profile_created_at).toLocaleDateString() : "—"}
+            </div>
+            <div style={{ color: "var(--app-ink-3,#6B7280)" }}>
+              {u.last_activity_at ? new Date(u.last_activity_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }) : "never"}
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <button
+                onClick={() => removeUser(u.user_id, u.email)}
+                disabled={busy}
+                className="btn btn--ghost"
+                style={{ fontSize: 12, color: "#B91C1C" }}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p style={{ marginTop: 12, fontSize: 12, color: "var(--app-ink-3,#6B7280)" }}>
+        Self-signup is also enabled at <code>/signup</code>. Role is auto-assigned from email domain
+        (<code>@modern-amenities.com</code> → agency_admin, others → client_member).
+      </p>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
+import { logActivity, logSystemActivity } from "@/lib/activity";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -33,6 +34,9 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const t0 = Date.now();
+  // Was this triggered by the cron secret or a logged-in admin clicking Re-sync?
+  const cronSecret = req.headers.get("x-cron-secret") ?? new URL(req.url).searchParams.get("secret");
+  const isCron = !!cronSecret && cronSecret === process.env.CRON_SECRET;
 
   // 1) Fetch sheet CSV
   const sheetRes = await fetch(SHEET_URL, { cache: "no-store" });
@@ -118,9 +122,10 @@ export async function POST(req: NextRequest) {
   const fresh = sheetLeads.filter((l) => !existing.has(l.email));
 
   if (fresh.length === 0) {
-    return NextResponse.json({
-      ok: true, parsed: sheetLeads.length, existing: existing.size, inserted: 0, durationMs: Date.now() - t0,
-    });
+    const meta = { parsed: sheetLeads.length, existing: existing.size, inserted: 0, durationMs: Date.now() - t0 };
+    if (isCron) await logSystemActivity({ action: "sync.cron", target_type: "sync", metadata: meta, actor: "github-actions" });
+    else        await logActivity(req,    { action: "sync.run",  target_type: "sync", metadata: meta });
+    return NextResponse.json({ ok: true, ...meta });
   }
 
   // 4) Insert
@@ -137,14 +142,17 @@ export async function POST(req: NextRequest) {
   const { error } = await sb.from("leads").insert(rows);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({
-    ok: true,
+  const meta = {
     parsed: sheetLeads.length,
     existing: existing.size,
     inserted: rows.length,
     sampleEmail: rows[0].email,
     durationMs: Date.now() - t0,
-  });
+  };
+  if (isCron) await logSystemActivity({ action: "sync.cron", target_type: "sync", metadata: meta, actor: "github-actions" });
+  else        await logActivity(req,    { action: "sync.run",  target_type: "sync", metadata: meta });
+
+  return NextResponse.json({ ok: true, ...meta });
 }
 
 export async function GET(req: NextRequest) { return POST(req); }
